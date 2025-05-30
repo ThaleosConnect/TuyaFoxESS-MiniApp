@@ -1,0 +1,19 @@
+<view class="debug-panel {{visible ? 'visible' : 'hidden'}} {{expanded ? 'expanded' : 'collapsed'}}">
+  <view class="debug-header" bindtap="toggleExpand">
+    <text class="debug-title">Debug Console {{expanded ? '▼' : '▲'}}</text>
+    <view class="debug-actions" catchtap>
+      <button size="mini" type="default" bindtap="clearLogs">Clear</button>
+      <button size="mini" type="primary" bindtap="copyLogs">Copy</button>
+    </view>
+  </view>
+  
+  <scroll-view class="debug-logs" scroll-y="true" enhanced="true" show-scrollbar="true">
+    <block wx:for="{{logs}}" wx:key="index">
+      <view class="log-entry log-{{item.level.toLowerCase()}}">
+        <text class="log-timestamp">[{{item.timestamp}}]</text>
+        <text class="log-level">[{{item.level}}]</text>
+        <text class="log-message">{{item.message}}</text>
+      </view>
+    </block>
+  </scroll-view>
+</view>

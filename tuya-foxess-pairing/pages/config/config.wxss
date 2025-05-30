@@ -1,0 +1,218 @@
+/* Config page styles */
+.container {
+  padding: 30rpx;
+}
+
+.title {
+  font-size: 36rpx;
+  font-weight: bold;
+  margin-bottom: 30rpx;
+  text-align: center;
+}
+
+.form-group {
+  margin-bottom: 20rpx;
+}
+
+.label {
+  font-size: 28rpx;
+  margin-bottom: 10rpx;
+}
+
+.input {
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 15rpx;
+  font-size: 28rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.status-text {
+  font-size: 28rpx;
+  color: #666;
+  padding: 15rpx 0;
+}
+
+.success-text {
+  color: #07c160;
+}
+
+.btn {
+  background-color: #07c160;
+  color: white;
+  border-radius: 8rpx;
+  font-size: 30rpx;
+  margin-top: 30rpx;
+  width: 100%;
+}
+
+.btn-secondary {
+  background-color: #666;
+  margin-top: 20rpx;
+}
+
+/* Debug UI Styles */
+.debug-toggle {
+  position: fixed;
+  bottom: 20rpx;
+  right: 20rpx;
+  z-index: 100;
+}
+
+.btn-debug {
+  background-color: #333;
+  color: white;
+  font-size: 24rpx;
+  padding: 10rpx 20rpx;
+  border-radius: 8rpx;
+  opacity: 0.8;
+}
+
+.debug-section {
+  margin-top: 40rpx;
+  padding: 20rpx;
+  border: 1px solid #ccc;
+  border-radius: 8rpx;
+  background-color: #f9f9f9;
+}
+
+.debug-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  margin-bottom: 20rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-clear {
+  font-size: 22rpx;
+  padding: 6rpx 12rpx;
+  background-color: #ddd;
+  color: #333;
+  border-radius: 4rpx;
+}
+
+.progress-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 15rpx;
+}
+
+.step-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10rpx 0;
+  border-bottom: 1px solid #eee;
+}
+
+.step-label {
+  font-size: 26rpx;
+}
+
+.step-status {
+  font-size: 26rpx;
+  width: 40rpx;
+  height: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #999;
+}
+
+.step-status.completed {
+  background-color: #07c160;
+  color: white;
+}
+
+.step-status.failed {
+  background-color: #e64340;
+  color: white;
+}
+
+.step-status.in-progress {
+  background-color: #10aeff;
+  color: white;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.debug-logs-container {
+  margin-top: 30rpx;
+  border: 1px solid #ccc;
+  border-radius: 8rpx;
+  background-color: #f9f9f9;
+  padding: 20rpx;
+}
+
+.debug-logs {
+  height: 400rpx;
+  border: 1px solid #eee;
+  background-color: #fff;
+  border-radius: 6rpx;
+  padding: 10rpx;
+}
+
+.log-entry {
+  padding: 10rpx 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 24rpx;
+  font-family: monospace;
+}
+
+.log-timestamp {
+  color: #999;
+  margin-right: 8rpx;
+}
+
+.log-level {
+  font-weight: bold;
+  margin-right: 8rpx;
+}
+
+.log-info .log-level {
+  color: #10aeff;
+}
+
+.log-debug .log-level {
+  color: #07c160;
+}
+
+.log-error .log-level {
+  color: #e64340;
+}
+
+.log-warn .log-level {
+  color: #fbbd08;
+}
+
+.log-packet .log-level {
+  color: #8a2be2;
+}
+
+.log-message {
+  color: #333;
+}
+
+.log-data {
+  margin-top: 6rpx;
+  margin-left: 20rpx;
+  color: #666;
+  word-break: break-all;
+  font-size: 22rpx;
+}
+
+.no-logs {
+  text-align: center;
+  color: #999;
+  padding: 50rpx 0;
+  font-size: 26rpx;
+}

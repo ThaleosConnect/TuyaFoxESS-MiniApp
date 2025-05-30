@@ -23,4 +23,60 @@
   </form>
   
   <button class="btn btn-secondary" bindtap="goBack">Back</button>
+  
+  <!-- Debug toggle button -->
+  <view class="debug-toggle">
+    <button class="btn-debug" bindtap="toggleDebugMode">{{debugMode ? 'Hide Debug' : 'Show Debug'}}</button>
+  </view>
+  
+  <!-- Pairing Progress Indicator -->
+  <view class="debug-section" wx:if="{{debugMode}}">
+    <view class="debug-title">Pairing Progress</view>
+    <view class="progress-steps">
+      <view class="step-item">
+        <view class="step-label">Device Scan</view>
+        <view class="step-status {{stepProgress.scanning === 'completed' ? 'completed' : stepProgress.scanning === 'failed' ? 'failed' : stepProgress.scanning === 'in_progress' ? 'in-progress' : ''}}">{{stepProgress.scanning === 'completed' ? '✓' : stepProgress.scanning === 'failed' ? '✗' : stepProgress.scanning === 'in_progress' ? '...' : '○'}}</view>
+      </view>
+      <view class="step-item">
+        <view class="step-label">Connect</view>
+        <view class="step-status {{stepProgress.connecting === 'completed' ? 'completed' : stepProgress.connecting === 'failed' ? 'failed' : stepProgress.connecting === 'in_progress' ? 'in-progress' : ''}}">{{stepProgress.connecting === 'completed' ? '✓' : stepProgress.connecting === 'failed' ? '✗' : stepProgress.connecting === 'in_progress' ? '...' : '○'}}</view>
+      </view>
+      <view class="step-item">
+        <view class="step-label">Services</view>
+        <view class="step-status {{stepProgress.services === 'completed' ? 'completed' : stepProgress.services === 'failed' ? 'failed' : stepProgress.services === 'in_progress' ? 'in-progress' : ''}}">{{stepProgress.services === 'completed' ? '✓' : stepProgress.services === 'failed' ? '✗' : stepProgress.services === 'in_progress' ? '...' : '○'}}</view>
+      </view>
+      <view class="step-item">
+        <view class="step-label">Characteristics</view>
+        <view class="step-status {{stepProgress.characteristics === 'completed' ? 'completed' : stepProgress.characteristics === 'failed' ? 'failed' : stepProgress.characteristics === 'in_progress' ? 'in-progress' : ''}}">{{stepProgress.characteristics === 'completed' ? '✓' : stepProgress.characteristics === 'failed' ? '✗' : stepProgress.characteristics === 'in_progress' ? '...' : '○'}}</view>
+      </view>
+      <view class="step-item">
+        <view class="step-label">Send Config</view>
+        <view class="step-status {{stepProgress.sending === 'completed' ? 'completed' : stepProgress.sending === 'failed' ? 'failed' : stepProgress.sending === 'in_progress' ? 'in-progress' : ''}}">{{stepProgress.sending === 'completed' ? '✓' : stepProgress.sending === 'failed' ? '✗' : stepProgress.sending === 'in_progress' ? '...' : '○'}}</view>
+      </view>
+      <view class="step-item">
+        <view class="step-label">Receive Response</view>
+        <view class="step-status {{stepProgress.receiving === 'completed' ? 'completed' : stepProgress.receiving === 'failed' ? 'failed' : stepProgress.receiving === 'in_progress' ? 'in-progress' : ''}}">{{stepProgress.receiving === 'completed' ? '✓' : stepProgress.receiving === 'failed' ? '✗' : stepProgress.receiving === 'in_progress' ? '...' : '○'}}</view>
+      </view>
+    </view>
+  </view>
+  
+  <!-- Debug Logs Section -->
+  <view class="debug-logs-container" wx:if="{{debugMode}}">
+    <view class="debug-title">Debug Logs <button class="btn-clear" bindtap="clearDebugLogs">Clear</button></view>
+    <scroll-view class="debug-logs" scroll-y="true">
+      <block wx:for="{{debugLogs}}" wx:key="index">
+        <view class="log-entry log-{{item.level}}">
+          <text class="log-timestamp">[{{item.timestamp}}]</text>
+          <text class="log-level">[{{item.level}}]</text>
+          <text class="log-message">{{item.message}}</text>
+          <view wx:if="{{item.data}}" class="log-data">
+            {{item.data.hexData ? item.data.hexData : (item.data.length ? 'Length: ' + item.data.length : JSON.stringify(item.data))}}
+          </view>
+        </view>
+      </block>
+      <view wx:if="{{!debugLogs.length}}" class="no-logs">No logs yet. Start the pairing process to see debug information.</view>
+    </scroll-view>
+  </view>
+  
+  <!-- No component dependency - simple debug output -->
 </view>

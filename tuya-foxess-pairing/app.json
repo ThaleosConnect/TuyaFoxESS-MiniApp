@@ -12,5 +12,8 @@
     "backgroundColor": "#f8f8f8",
     "backgroundTextStyle": "light"
   },
+  "usingComponents": {
+    "debug-panel": "/components/debug-panel/debug-panel"
+  },
   "themeLocation": "./theme.json"
 }

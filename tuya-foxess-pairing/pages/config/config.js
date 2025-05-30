@@ -1,50 +1,156 @@
 // Config page for FoxESS Pairing Mini App
 import { crc16 } from '../../utils/crc16';
+import { DebugUtils } from '../../utils/debug-utils';
+
+// Constants
+const SERVICE_UUID = '00FF';
+const CHARACTERISTIC_UUID = 'FF01';
 
 Page({
   data: {
     ssid: '',
     password: '',
     connecting: false,
-    statusMessage: 'Ready to connect',
-    connectionStatus: 'disconnected'
+    connectionStatus: 'disconnected', // 'disconnected', 'connecting', 'connected', 'failed'
+    statusMessage: 'Please enter your Wi-Fi details',
+    debugMode: false,
+    debugLogs: [],
+    showPacketDetails: false,
+    currentPacket: null,
+    stepProgress: {
+      scanning: 'pending',    // 'pending', 'in_progress', 'completed', 'failed'
+      connecting: 'pending',
+      services: 'pending',
+      characteristics: 'pending',
+      sending: 'pending',
+      receiving: 'pending'
+    }
   },
-
+  
+  // On page load
+  onLoad() {
+    // Enable debug mode for development
+    this.setData({
+      debugMode: true
+    });
+    
+    // Initialize DebugUtils
+    DebugUtils.setDebugMode(true);
+    
+    // Add initial debug log
+    this.addDebugLog('info', 'Config page loaded');
+  },
+  
   // Input handlers for SSID and password
-  onSsidInput: function(e) {
+  onSsidInput(e) {
     this.setData({
       ssid: e.detail.value
     });
   },
-
-  onPasswordInput: function(e) {
+  
+  onPasswordInput(e) {
     this.setData({
       password: e.detail.value
     });
   },
-
+  
   // Submit form to configure Wi-Fi on the device
-  submitForm: function(e) {
+  submitForm(e) {
     const { ssid, password } = e.detail.value;
     
-    if (!ssid || !password) {
+    if (!ssid) {
       wx.showToast({
-        title: 'Please enter both SSID and password',
-        icon: 'none',
-        duration: 2000
+        title: 'Please enter SSID',
+        icon: 'none'
       });
       return;
     }
-
+    
+    this.addDebugLog('info', 'Starting WiFi configuration', { ssid });
+    
+    // Connect to device and send Wi-Fi config
     this.connectDevice(ssid, password);
   },
-
+  
+  // Toggle debug mode
+  toggleDebugMode() {
+    const newDebugMode = !this.data.debugMode;
+    this.setData({
+      debugMode: newDebugMode
+    });
+    
+    DebugUtils.setDebugMode(newDebugMode);
+    this.addDebugLog('info', newDebugMode ? 'Debug mode enabled' : 'Debug mode disabled');
+  },
+  
+  // Clear debug logs
+  clearDebugLogs() {
+    this.setData({
+      debugLogs: []
+    });
+    
+    DebugUtils.clear();
+    this.addDebugLog('info', 'Debug logs cleared');
+  },
+  
+  // View packet details
+  viewPacketDetails(e) {
+    const index = e.currentTarget.dataset.index;
+    const log = this.data.debugLogs[index];
+    
+    if (log && log.data && log.data.hexData) {
+      this.setData({
+        showPacketDetails: true,
+        currentPacket: log
+      });
+    }
+  },
+  
+  // Hide packet details
+  hidePacketDetails() {
+    this.setData({
+      showPacketDetails: false
+    });
+  },
+  
+  // Add debug log entry
+  addDebugLog(level, message, data) {
+    const timestamp = new Date().toISOString().substring(11, 23);
+    const logEntry = {
+      timestamp,
+      level,
+      message,
+      data: data || null
+    };
+    
+    // Add to beginning of array for newest first
+    const newLogs = [logEntry, ...this.data.debugLogs];
+    // Cap logs at 100
+    const cappedLogs = newLogs.slice(0, 100);
+    
+    this.setData({
+      debugLogs: cappedLogs
+    });
+    
+    // Also log to DebugUtils
+    DebugUtils.log(level, message, data);
+    
+    return logEntry;
+  },
+  
   // Connect to the selected device and configure Wi-Fi
-  connectDevice: function(ssid, password) {
+  connectDevice(ssid, password) {
     const app = getApp();
     const selectedDevice = app.globalData.selectedDevice;
     
     if (!selectedDevice) {
+      this.addDebugLog('error', 'No device selected for connection');
+      
+      // Update step progress
+      this.setData({
+        'stepProgress.scanning': 'failed'
+      });
+      
       wx.showToast({
         title: 'No device selected',
         icon: 'none',
@@ -57,11 +163,18 @@ Page({
       
       return;
     }
+    
+    this.addDebugLog('info', 'Starting device connection process', { 
+      deviceId: selectedDevice.deviceId,
+      deviceName: selectedDevice.name
+    });
 
     this.setData({
       connecting: true,
       statusMessage: 'Connecting to device...',
-      connectionStatus: 'connecting'
+      connectionStatus: 'connecting',
+      'stepProgress.scanning': 'completed',
+      'stepProgress.connecting': 'in_progress'
     });
 
     wx.showLoading({
@@ -73,19 +186,26 @@ Page({
     wx.createBLEConnection({
       deviceId: selectedDevice.deviceId,
       success: (res) => {
-        console.log('Connected to device:', res);
+        this.addDebugLog('info', 'Connected to device successfully');
+        
         this.setData({
           statusMessage: 'Connected to device. Configuring Wi-Fi...',
-          connectionStatus: 'connected'
+          connectionStatus: 'connected',
+          'stepProgress.connecting': 'completed',
+          'stepProgress.services': 'in_progress'
         });
 
         // Get services for the device
         wx.getBLEDeviceServices({
           deviceId: selectedDevice.deviceId,
           success: (res) => {
-            console.log('Device services:', res.services);
+            this.addDebugLog('debug', 'Device services discovered', { 
+              services: res.services && res.services.length ? res.services.map(s => s.uuid) : []
+            });
             
-            const foxessService = res.services.find(s => s.uuid.toLowerCase().includes('00ff'));
+            const foxessService = res.services && res.services.length ? res.services.find(s => 
+              s.uuid && s.uuid.toLowerCase().includes('00ff')
+            ) : null;
             
             if (foxessService) {
               // Get characteristics for the service
@@ -93,14 +213,29 @@ Page({
                 deviceId: selectedDevice.deviceId,
                 serviceId: foxessService.uuid,
                 success: (res) => {
-                  console.log('Service characteristics:', res.characteristics);
+                  this.addDebugLog('debug', 'Service characteristics discovered', { 
+                    characteristics: res.characteristics && res.characteristics.length ? res.characteristics.map(c => ({ 
+                      uuid: c.uuid, 
+                      properties: c.properties 
+                    })) : []
+                  });
                   
-                  const writeCharacteristic = res.characteristics.find(c => 
-                    c.uuid.toLowerCase().includes('ff01') && 
-                    c.properties.write
-                  );
+                  this.setData({
+                    'stepProgress.services': 'completed',
+                    'stepProgress.characteristics': 'in_progress'
+                  });
+                  
+                  const writeCharacteristic = res.characteristics && res.characteristics.length ? res.characteristics.find(c => 
+                    c.uuid && c.uuid.toLowerCase().includes('ff01') && 
+                    c.properties && c.properties.write
+                  ) : null;
                   
                   if (writeCharacteristic) {
+                    this.setData({
+                      'stepProgress.characteristics': 'completed',
+                      'stepProgress.sending': 'in_progress'
+                    });
+                    
                     // Send Wi-Fi configuration
                     this.sendWifiConfig(
                       selectedDevice.deviceId, 
@@ -110,11 +245,15 @@ Page({
                       password
                     );
                   } else {
+                    this.addDebugLog('error', 'Write characteristic not found in service');
+                    this.setData({
+                      'stepProgress.characteristics': 'failed'
+                    });
                     this.handleConnectionError('Write characteristic not found');
                   }
                 },
                 fail: (error) => {
-                  console.error('Failed to get characteristics:', error);
+                  this.addDebugLog('error', 'Failed to get characteristics', { error });
                   this.handleConnectionError('Failed to get characteristics');
                 }
               });
@@ -123,20 +262,39 @@ Page({
             }
           },
           fail: (error) => {
-            console.error('Failed to get services:', error);
+            this.addDebugLog('error', 'Failed to get services', { error });
             this.handleConnectionError('Failed to get services');
           }
         });
       },
       fail: (error) => {
-        console.error('Failed to connect to device:', error);
+        this.addDebugLog('error', 'Failed to connect to device', { error });
         this.handleConnectionError('Failed to connect to device');
       }
     });
   },
-
+  
+  // Handle connection errors
+  handleConnectionError(message) {
+    this.addDebugLog('error', 'Connection error', { message });
+    
+    this.setData({
+      connectionStatus: 'failed',
+      statusMessage: `Error: ${message}`,
+      connecting: false
+    });
+    
+    wx.hideLoading();
+    
+    wx.showToast({
+      title: message,
+      icon: 'none',
+      duration: 2000
+    });
+  },
+  
   // Build FoxESS WiFi configuration packet (command 0x3B)
-  buildFoxWifiFrame: function(ssid, password) {
+  buildFoxWifiFrame(ssid, password) {
     // FoxESS protocol requires:
     // 55 AA 3B <len> SSID\0 PASS\0 CRC16
     
@@ -160,281 +318,233 @@ Page({
     // Full packet: header (55 AA) + command (3B) + length + body
     const packet = [0x55, 0xAA, 0x3B, len, ...body];
     
-    // Calculate CRC-16 and append
+    // Add CRC-16 at the end
     const crcValue = crc16(packet);
-    packet.push(crcValue & 0xFF); // Low byte
-    packet.push((crcValue >> 8) & 0xFF); // High byte
+    packet.push(crcValue & 0xFF);  // Take lower byte of CRC
     
-    return new Uint8Array(packet);
-  },
-
-  // Write frame to BLE characteristic in chunks (max 20 bytes per write)
-  writeChunkedFrame: async function(deviceId, serviceId, characteristicId, frame) {
-    const chunkSize = 20; // BLE standard MTU size
-    let success = true;
+    // Convert to ArrayBuffer for BLE transmission
+    const buffer = new ArrayBuffer(packet.length);
+    const dataView = new Uint8Array(buffer);
     
-    try {
-      // Write in chunks
-      for (let i = 0; i < frame.length; i += chunkSize) {
-        const chunk = frame.slice(i, Math.min(i + chunkSize, frame.length));
-        
-        // Create buffer for this chunk
-        const buffer = new ArrayBuffer(chunk.length);
-        const dataView = new DataView(buffer);
-        
-        for (let j = 0; j < chunk.length; j++) {
-          dataView.setUint8(j, chunk[j]);
-        }
-        
-        // Use await with a Promise wrapper to handle BLE operations sequentially
-        await new Promise((resolve, reject) => {
-          wx.writeBLECharacteristicValue({
-            deviceId: deviceId,
-            serviceId: serviceId,
-            characteristicId: characteristicId,
-            value: buffer,
-            success: resolve,
-            fail: (err) => {
-              console.error(`Failed to write chunk at offset ${i}:`, err);
-              success = false;
-              reject(err);
-            }
-          });
-        });
-        
-        // Small delay between chunks
-        await new Promise(resolve => setTimeout(resolve, 20));
-      }
-      
-      return success;
-    } catch (error) {
-      console.error('Error in chunked write:', error);
-      return false;
+    for (let i = 0; i < packet.length; i++) {
+      dataView[i] = packet[i];
     }
-  },
-
-  // Parse FoxESS response frame (command 0x3A)
-  parseFoxReply: function(value) {
-    try {
-      const data = new Uint8Array(value);
-      console.log('Received response:', Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' '));
-      
-      // Check if this is a valid FoxESS frame: 55 AA 3A ...
-      if (data.length >= 7 && data[0] === 0x55 && data[1] === 0xAA && data[2] === 0x3A) {
-        // Status codes in bytes 5-7
-        // 04 01 01 03 = Online and connected to WiFi
-        if (data[5] === 0x01 && data[6] === 0x03) {
-          console.log('Device is connected to WiFi and online!');
-          this.setData({
-            statusMessage: 'Device connected to WiFi successfully!',
-            connectionStatus: 'success'
-          });
-          
-          // Navigate to result page
-          wx.hideLoading();
-          const app = getApp();
-          app.globalData.connectionInfo = {
-            deviceId: this.data.deviceId,
-            ssid: this.data.ssid
-          };
-          
-          wx.navigateTo({
-            url: '/pages/result/result?success=true'
-          });
-          
-          // Stop listening for notifications
-          wx.notifyBLECharacteristicValueChange({
-            deviceId: this.data.deviceId,
-            serviceId: this.data.serviceId,
-            characteristicId: this.data.characteristicId,
-            state: false
-          });
-        } else if (data[5] === 0x01 && data[6] === 0x02) {
-          // Connecting to WiFi
-          this.setData({
-            statusMessage: 'Device is connecting to WiFi...',
-            connectionStatus: 'connecting'
-          });
-        } else if (data[5] === 0x01 && data[6] === 0x01) {
-          // Got WiFi settings
-          this.setData({
-            statusMessage: 'Device received WiFi settings...',
-            connectionStatus: 'connecting'
-          });
-        } else {
-          console.log('Device status update:', data[5], data[6]);
-        }
-      }
-    } catch (error) {
-      console.error('Error parsing response:', error);
+    
+    // Log the packet for debugging
+    let hexString = '';
+    for (let i = 0; i < dataView.length; i++) {
+      hexString += dataView[i].toString(16).padStart(2, '0') + ' ';
     }
+    
+    this.addDebugLog('debug', 'Built WiFi config packet', { 
+      command: '0x3B',
+      ssidLength: ssidBytes.length,
+      passwordLength: passwordBytes.length,
+      totalLength: packet.length,
+      hexData: hexString.trim()
+    });
+    
+    return buffer;
   },
-
-  // Send Wi-Fi configuration to the device
-  sendWifiConfig: async function(deviceId, serviceId, characteristicId, ssid, password) {
-    try {
-      this.setData({
-        deviceId: deviceId,
-        serviceId: serviceId,
-        characteristicId: characteristicId,
-        ssid: ssid
-      });
-      
-      // 1. Enable notifications to receive status updates
-      await new Promise((resolve, reject) => {
-        wx.notifyBLECharacteristicValueChange({
-          deviceId: deviceId,
-          serviceId: serviceId,
-          characteristicId: characteristicId,
-          state: true,
-          success: resolve,
-          fail: reject
-        });
-      });
-      
-      // Set up notification handler
-      wx.onBLECharacteristicValueChange(result => {
-        this.parseFoxReply(result.value);
-      });
-      
-      // 2. Build the FoxESS WiFi frame
-      const wifiFrame = this.buildFoxWifiFrame(ssid, password);
-      console.log('WiFi frame:', Array.from(wifiFrame).map(b => b.toString(16).padStart(2, '0')).join(' '));
-      
-      // 3. Send the frame in chunks
-      this.setData({
-        statusMessage: 'Sending WiFi configuration...',
-        connectionStatus: 'configuring'
-      });
-      
-      const success = await this.writeChunkedFrame(deviceId, serviceId, characteristicId, wifiFrame);
-      
-      if (success) {
-        this.setData({
-          statusMessage: 'WiFi configuration sent. Waiting for device to connect...',
-          connectionStatus: 'waiting'
-        });
+  
+  // Send WiFi configuration to the device
+  sendWifiConfig(deviceId, serviceId, characteristicId, ssid, password) {
+    this.addDebugLog('info', 'Sending WiFi configuration', { 
+      ssid, 
+      serviceId, 
+      characteristicId 
+    });
+    
+    const wifiConfigPacket = this.buildFoxWifiFrame(ssid, password);
+    
+    // Enable notifications for response
+    wx.notifyBLECharacteristicValueChange({
+      deviceId,
+      serviceId,
+      characteristicId,
+      state: true,
+      success: () => {
+        this.addDebugLog('debug', 'Enabled notifications for characteristic');
         
-        // Set a timeout to handle cases where the device doesn't respond
-        this.connectionTimeout = setTimeout(() => {
-          wx.hideLoading();
-          if (this.data.connectionStatus !== 'success') {
-            this.handleConnectionError('Connection timeout. Device did not confirm WiFi connection.');
+        // Write the configuration packet
+        wx.writeBLECharacteristicValue({
+          deviceId,
+          serviceId,
+          characteristicId,
+          value: wifiConfigPacket,
+          success: () => {
+            this.addDebugLog('info', 'WiFi configuration sent successfully');
+            this.setData({
+              'stepProgress.sending': 'completed',
+              'stepProgress.receiving': 'in_progress',
+              statusMessage: 'Sent Wi-Fi config, waiting for response...'
+            });
+          },
+          fail: (error) => {
+            this.addDebugLog('error', 'Failed to send WiFi configuration', { error });
+            this.setData({
+              'stepProgress.sending': 'failed'
+            });
+            this.handleConnectionError('Failed to send WiFi configuration');
           }
-        }, 30000); // 30 seconds timeout
+        });
+      },
+      fail: (error) => {
+        this.addDebugLog('error', 'Failed to enable notifications', { error });
+        this.handleConnectionError('Failed to enable notifications');
+      }
+    });
+    
+    // Set up notification handler
+    wx.onBLECharacteristicValueChange(result => {
+      this.parseFoxReply(result.value);
+    });
+  },
+  
+  // Parse FoxESS reply packet
+  parseFoxReply(data) {
+    try {
+      // First convert ArrayBuffer to Uint8Array
+      const dataView = new Uint8Array(data);
+      
+      // Log the raw hex data
+      let hexString = '';
+      for (let i = 0; i < dataView.length; i++) {
+        hexString += dataView[i].toString(16).padStart(2, '0') + ' ';
+      }
+      
+      this.addDebugLog('debug', 'Received data from device', { hexData: hexString.trim() });
+      
+      // FoxESS response packet structure:
+      // 55 AA <cmd> <status> <data...> <crc>
+      if (dataView.length < 5) { // Minimum valid length (header + cmd + status + crc)
+        this.addDebugLog('error', 'Response packet too short', { length: dataView.length });
+        return;
+      }
+      
+      // Check packet header (55 AA)
+      if (dataView[0] !== 0x55 || dataView[1] !== 0xAA) {
+        this.addDebugLog('error', 'Invalid packet header', { 
+          header: `${dataView[0].toString(16)} ${dataView[1].toString(16)}`
+        });
+        return;
+      }
+      
+      const command = dataView[2];
+      const status = dataView[3];
+      
+      // Extract the payload (everything between status and CRC)
+      const payloadLength = dataView.length - 5; // Subtract header(2) + cmd(1) + status(1) + crc(1)
+      const payload = dataView.slice(4, 4 + payloadLength);
+      
+      // Verify CRC
+      const calculatedCrc = crc16(dataView.slice(0, dataView.length - 1));
+      const receivedCrc = dataView[dataView.length - 1];
+      
+      const crcValid = (calculatedCrc & 0xFF) === receivedCrc;
+      
+      this.addDebugLog('info', 'Parsed response packet', {
+        command: `0x${command.toString(16)}`,
+        status: status,
+        payloadLength: payloadLength,
+        crcValid: crcValid
+      });
+      
+      this.setData({
+        'stepProgress.receiving': 'completed'
+      });
+      
+      // Process based on command
+      if (command === 0x3B) { // WiFi config response
+        this.processWifiConfigResponse(status, payload);
       } else {
-        this.handleConnectionError('Failed to send WiFi configuration');
+        this.addDebugLog('debug', 'Unknown command in response', { command: `0x${command.toString(16)}` });
       }
     } catch (error) {
-      console.error('Error in sendWifiConfig:', error);
-      this.handleConnectionError('Error configuring WiFi: ' + error.message);
+      this.addDebugLog('error', 'Failed to parse response', { error: error.message });
+      this.setData({
+        'stepProgress.receiving': 'failed'
+      });
     }
   },
-
-  // Handle connection errors
-  handleConnectionError: function(message) {
+  
+  // Process WiFi configuration response
+  processWifiConfigResponse(status, payload) {
     wx.hideLoading();
     
-    this.setData({
-      connecting: false,
-      statusMessage: message,
-      connectionStatus: 'failed'
-    });
-    
-    wx.showToast({
-      title: message,
-      icon: 'none',
-      duration: 2000
-    });
-  },
-
-  // Go back to the scan page
-  goBack: function() {
-    wx.navigateBack();
-  },
-
-  // Lifecycle function - called when page loads
-  onLoad: function(options) {
-    console.log('Config page loaded');
-    
-    // Get selected device from global data
-    const app = getApp();
-    const selectedDevice = app.globalData.selectedDevice;
-    
-    if (!selectedDevice) {
+    if (status === 0) {
+      this.addDebugLog('info', 'WiFi configuration successful');
+      
+      this.setData({
+        connectionStatus: 'connected',
+        statusMessage: 'Wi-Fi configuration successful!',
+        connecting: false
+      });
+      
       wx.showToast({
-        title: 'No device selected',
-        icon: 'none',
+        title: 'Configuration successful',
+        icon: 'success',
         duration: 2000
       });
       
+      // Close BLE connection after successful config
+      this.closeBleConnection();
+      
+      // Navigate back after delay
       setTimeout(() => {
         wx.navigateBack();
-      }, 2000);
-    }
-  },
-
-  // Lifecycle function - called when page is initially rendered
-  onReady: function() {
-    console.log('Config page ready');
-  },
-
-  // Lifecycle function - called when page show
-  onShow: function() {
-    console.log('Config page shown');
-  },
-
-  // Lifecycle function - called when page hide
-  onHide: function() {
-    console.log('Config page hidden');
-  },
-
-  // Lifecycle function - called when page unload
-  onUnload: function() {
-    console.log('Config page unloaded');
-    
-    // Clear any pending timeouts
-    if (this.connectionTimeout) {
-      clearTimeout(this.connectionTimeout);
-    }
-    
-    // Remove BLE notification listener
-    wx.offBLECharacteristicValueChange();
-    
-    // Disable notifications if active
-    if (this.data.deviceId && this.data.serviceId && this.data.characteristicId) {
-      wx.notifyBLECharacteristicValueChange({
-        deviceId: this.data.deviceId,
-        serviceId: this.data.serviceId,
-        characteristicId: this.data.characteristicId,
-        state: false,
-        complete: () => {
-          console.log('Notifications disabled');
-        }
+      }, 3000);
+    } else {
+      this.addDebugLog('error', 'WiFi configuration failed', { status });
+      
+      this.setData({
+        connectionStatus: 'failed',
+        statusMessage: 'Wi-Fi configuration failed',
+        connecting: false
+      });
+      
+      wx.showToast({
+        title: 'Configuration failed',
+        icon: 'none',
+        duration: 2000
       });
     }
-    
-    // Close any BLE connection when navigating away
+  },
+  
+  // Close BLE connection
+  closeBleConnection() {
     const app = getApp();
     const selectedDevice = app.globalData.selectedDevice;
     
-    if (selectedDevice && selectedDevice.deviceId) {
+    if (selectedDevice) {
+      this.addDebugLog('debug', 'Closing BLE connection');
+      
       wx.closeBLEConnection({
         deviceId: selectedDevice.deviceId,
         success: (res) => {
-          console.log('BLE connection closed');
+          this.addDebugLog('debug', 'BLE connection closed');
         },
         fail: (error) => {
-          console.error('Failed to close BLE connection:', error);
+          this.addDebugLog('error', 'Failed to close BLE connection', { error });
         },
         complete: () => {
-          // Always try to stop discovery when leaving the page
-          wx.stopBluetoothDevicesDiscovery();
+          // Reset device selection
+          app.globalData.selectedDevice = null;
         }
       });
     } else {
       // Still try to stop discovery even if no device is connected
       wx.stopBluetoothDevicesDiscovery();
     }
+  },
+  
+  // Navigate back
+  goBack() {
+    wx.navigateBack();
+  },
+  
+  // Clean up when leaving the page
+  onUnload() {
+    this.closeBleConnection();
   }
 });
