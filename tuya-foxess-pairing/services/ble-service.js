@@ -9,10 +9,7 @@ import {
 } from '@ray-js/api';
 import { DebugUtils } from '../utils/debug-utils';
 
-// Constants
-const SERVICE_UUID = '00FF';
-const CHARACTERISTIC_UUID = 'FF01';
-const SCAN_TIMEOUT = 10000; // 10 seconds
+
 import { logger } from './logger-service';
 
 const SERVICE_UUID = '00FF';
