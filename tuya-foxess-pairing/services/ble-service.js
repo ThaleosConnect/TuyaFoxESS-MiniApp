@@ -10,7 +10,6 @@ import {
 import { DebugUtils } from '../utils/debug-utils';
 
 
-import { logger } from './logger-service';
 
 const SERVICE_UUID = '00FF';
 const CHARACTERISTIC_UUID = 'FF01';
