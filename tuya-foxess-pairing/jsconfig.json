@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["*"]
+    },
+    "target": "es2017",
+    "module": "commonjs",
+    "jsx": "react"
+  },
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,16 @@
+{
+  "light": {
+    "brandColor": "#1890ff",
+    "primaryColor": "#1890ff",
+    "backgroundColor": "#f8f8f8",
+    "textColor": "#333333",
+    "descTextColor": "#666666"
+  },
+  "dark": {
+    "brandColor": "#1890ff",
+    "primaryColor": "#1890ff",
+    "backgroundColor": "#121212",
+    "textColor": "#ffffff",
+    "descTextColor": "#aaaaaa"
+  }
+}

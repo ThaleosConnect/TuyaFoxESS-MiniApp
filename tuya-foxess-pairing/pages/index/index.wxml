@@ -1,0 +1,6 @@
+<view class="container">
+  <view class="title">FoxESS Pairing</view>
+  <image class="logo" src="../../assets/logo.png" mode="aspectFit"></image>
+  <view class="description">Connect and configure your FoxESS inverter</view>
+  <button class="btn" bindtap="onStartPairing">Start Pairing</button>
+</view>

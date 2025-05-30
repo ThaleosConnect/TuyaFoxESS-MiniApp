@@ -1,0 +1,140 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 20px;
+  background-color: #f8f8f8;
+}
+
+.header {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: #666;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+}
+
+.connection-status,
+.network-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background-color: #fff;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.status-label {
+  font-size: 16px;
+  color: #333;
+}
+
+.status-value {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.connected {
+  color: #3cc51f;
+}
+
+.disconnected {
+  color: #e74c3c;
+}
+
+.wifi-form {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.form-item {
+  margin-bottom: 15px;
+}
+
+.form-label {
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.form-input {
+  width: 100%;
+  height: 45px;
+  padding: 0 15px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: #fff;
+}
+
+.password-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input {
+  padding-right: 60px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.password-toggle-text {
+  font-size: 14px;
+  color: #3cc51f;
+}
+
+.error-container {
+  padding: 15px;
+  background-color: #fef0f0;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+.error-text {
+  font-size: 14px;
+  color: #e74c3c;
+}
+
+.footer {
+  padding: 10px 0;
+}
+
+.submit-button {
+  width: 100%;
+  height: 45px;
+  font-size: 16px;
+  background-color: #3cc51f;
+  color: #fff;
+  border-radius: 8px;
+}
+
+.submit-button[disabled] {
+  background-color: #cccccc;
+  color: #999999;
+}

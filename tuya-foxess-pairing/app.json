@@ -1,0 +1,16 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/scan/scan",
+    "pages/config/config",
+    "pages/result/result"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "FoxESS Pairing",
+    "backgroundColor": "#f8f8f8",
+    "backgroundTextStyle": "light"
+  },
+  "themeLocation": "./theme.json"
+}

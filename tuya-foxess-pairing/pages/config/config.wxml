@@ -1,0 +1,26 @@
+<view class="container">
+  <view class="title">Configure Device</view>
+  
+  <form bindsubmit="submitForm">
+    <view class="form-group">
+      <view class="label">Wi-Fi SSID:</view>
+      <input class="input" name="ssid" placeholder="Enter Wi-Fi name" value="{{ssid}}" />
+    </view>
+    
+    <view class="form-group">
+      <view class="label">Wi-Fi Password:</view>
+      <input class="input" password name="password" placeholder="Enter Wi-Fi password" value="{{password}}" />
+    </view>
+    
+    <view class="form-group">
+      <view class="label">Connection Status:</view>
+      <view class="status-text {{connectionStatus === 'connected' ? 'success-text' : ''}}">
+        {{statusMessage}}
+      </view>
+    </view>
+    
+    <button class="btn" form-type="submit">Connect</button>
+  </form>
+  
+  <button class="btn btn-secondary" bindtap="goBack">Back</button>
+</view>

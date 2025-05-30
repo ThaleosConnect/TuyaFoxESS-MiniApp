@@ -1,0 +1,25 @@
+<view class="container">
+  <view class="title">Scan for Devices</view>
+  
+  <!-- Always visible back button -->
+  <view class="back-btn-container">
+    <button class="btn btn-back" bindtap="goBack">Back</button>
+  </view>
+  
+  <block wx:if="{{scanning}}">
+    <view class="loading">Scanning for FoxESS devices...</view>
+  </block>
+  <block wx:else>
+    <scroll-view scroll-y class="device-list">
+      <block wx:for="{{devices}}" wx:key="deviceId">
+        <view class="device-item" bindtap="selectDevice" data-device="{{item}}">
+          <view class="device-name">{{item.name || 'Unknown Device'}}</view>
+          <view class="device-id">ID: {{item.deviceId}}</view>
+          <view class="device-rssi">Signal: {{item.RSSI}} dBm</view>
+        </view>
+      </block>
+    </scroll-view>
+    <button class="btn" bindtap="startScan">Refresh</button>
+    <button class="btn btn-secondary" bindtap="goBack">Back</button>
+  </block>
+</view>

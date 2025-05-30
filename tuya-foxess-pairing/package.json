@@ -1,0 +1,35 @@
+{
+  "name": "tuya-foxess-pairing",
+  "version": "1.0.0",
+  "description": "Tuya mini app for pairing with FoxESS hybrid inverters",
+  "main": "app.js",
+  "scripts": {
+    "start": "ray start",
+    "build": "ray build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "tuya",
+    "foxess",
+    "pairing",
+    "bluetooth",
+    "inverter"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ray-js/api": "*",
+    "@ray-js/components": "*",
+    "@ray-js/core": "*",
+    "@ray-js/framework": "*"
+  },
+  "devDependencies": {
+    "@ray-js/cli": "*"
+  },
+  "resolutions": {
+    "fsevents": "2.3.2"
+  },
+  "overrides": {
+    "fsevents": "2.3.2"
+  }
+}

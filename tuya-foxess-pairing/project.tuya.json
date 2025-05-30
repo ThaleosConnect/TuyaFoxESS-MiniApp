@@ -1,0 +1,48 @@
+{
+  "projectname": "FoxEss",
+  "description": "Tuya mini app for pairing with FoxESS hybrid inverters",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "./",
+  "appid": "tyteammtzvxt2lincl",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "preloadBackgroundData": false,
+    "minified": true,
+    "newFeature": true,
+    "coverView": true,
+    "nodeModules": true,
+    "autoAudits": false,
+    "showShadowRootInWxmlPanel": true,
+    "scopeDataCheck": false,
+    "uglifyFileName": false,
+    "checkInvalidKey": true,
+    "checkSiteMap": true,
+    "uploadWithSourceMap": true,
+    "compileHotReLoad": false,
+    "lazyloadPlaceholderEnable": false,
+    "useMultiFrameRuntime": true,
+    "useApiHook": true,
+    "useApiHostProcess": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "enableEngineNative": false,
+    "useIsolateContext": true,
+    "userConfirmedBundleSwitch": false,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "showES6CompileOption": false
+  },
+  "dependencies": {
+    "BizKit": "4.2.0",
+    "BaseKit": "3.0.6",
+    "MiniKit": "3.0.7"
+  },
+  "baseversion": "2.28.4"
+}

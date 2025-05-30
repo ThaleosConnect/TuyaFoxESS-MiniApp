@@ -1,0 +1,18 @@
+<view class="container">
+  <view class="title">Pairing Result</view>
+  
+  <view class="result-card">
+    <block wx:if="{{success}}">
+      <view class="success-icon">✓</view>
+      <view class="result-title success-text">Pairing Successful</view>
+      <view class="result-message">Your FoxESS inverter has been successfully connected to the Tuya cloud.</view>
+    </block>
+    <block wx:else>
+      <view class="error-icon">✗</view>
+      <view class="result-title error-text">Pairing Failed</view>
+      <view class="result-message">{{errorMessage || 'An error occurred during the pairing process.'}}</view>
+    </block>
+  </view>
+  
+  <button class="btn" bindtap="goHome">Back to Home</button>
+</view>
