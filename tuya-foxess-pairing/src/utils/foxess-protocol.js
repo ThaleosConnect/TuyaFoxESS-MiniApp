@@ -4,24 +4,24 @@ import { calculateCRC16MODBUS, verifyCRC16MODBUS } from './crc';
 export const FOXESS_SERVICE_UUID = '00FF';
 export const FOXESS_CHARACTERISTIC_UUID = 'FF01';
 
-// Frame headers and tails
-const APP_TO_MODULE_HEADER = new Uint8Array([0x7F, 0x7F]);
-const APP_TO_MODULE_TAIL = new Uint8Array([0xF7, 0xF7]);
-const MODULE_TO_APP_HEADER = new Uint8Array([0x7E, 0x7E]);
-const MODULE_TO_APP_TAIL = new Uint8Array([0xE7, 0xE7]);
+// Frame headers and tails (fixed values as per the protocol)
+export const APP_TO_DEVICE_HEADER = new Uint8Array([0x7F, 0x7F]);
+export const APP_TO_DEVICE_TAIL = new Uint8Array([0xF7, 0xF7]);
+export const DEVICE_TO_APP_HEADER = new Uint8Array([0x7E, 0x7E]);
+export const DEVICE_TO_APP_TAIL = new Uint8Array([0xE7, 0xE7]);
 
-// Function codes
+// Function codes (as specified in the protocol)
 export const FUNCTION_CODES = {
-  SET_WIFI: 0x3B,
-  READ_STATUS: 0x3A
+  SET_WIFI: 0x3B,  // Set wifi name and password
+  READ_STATUS: 0x3A  // Read network connection status
 };
 
-// Setting items
+// Setting items (as specified in protocol table 3B-2)
 export const SETTING_ITEMS = {
   SET_WIFI_CREDENTIALS: 0x02
 };
 
-// Status items
+// Status items (as specified in protocol)
 export const STATUS_ITEMS = {
   CONNECTION_STATUS: 0x04,
   SSID_LIST: 0x06
@@ -32,21 +32,21 @@ export const CONNECTION_STATUS = {
   DISCONNECTED: 0x00,
   CONNECTING: 0x01,
   CONNECTED: 0x02,
-  ONLINE: 0x03
+  CONNECTED_TO_CLOUD: 0x03
 };
 
 /**
- * Generate a random 4-byte timestamp
+ * Generate current timestamp in seconds (4 bytes as per protocol)
  * @returns {Uint8Array} - 4-byte timestamp
  */
 function generateTimestamp() {
-  const timestamp = new Uint8Array(4);
-  crypto.getRandomValues(timestamp);
-  // Ensure non-zero
-  if (timestamp[0] === 0 && timestamp[1] === 0 && timestamp[2] === 0 && timestamp[3] === 0) {
-    timestamp[0] = 1;
-  }
-  return timestamp;
+  const now = Math.floor(Date.now() / 1000); // Current time in seconds
+  return new Uint8Array([
+    now & 0xFF,
+    (now >> 8) & 0xFF,
+    (now >> 16) & 0xFF,
+    (now >> 24) & 0xFF
+  ]);
 }
 
 /**
@@ -73,69 +73,65 @@ function uint8ArrayToString(uint8Array) {
  * Create a packet for setting WiFi credentials
  * @param {string} ssid - WiFi SSID
  * @param {string} password - WiFi password
- * @param {string} token - Tuya pairing token
+ * @param {string} token - Tuya pairing token (optional)
  * @returns {Uint8Array} - Complete packet
  */
 export function createSetWifiPacket(ssid, password, token) {
   // Convert strings to Uint8Arrays
   const ssidBytes = stringToUint8Array(ssid);
   const passwordBytes = stringToUint8Array(password);
-  const tokenBytes = stringToUint8Array(token);
   
-  // Create user data
-  const userData = new Uint8Array(3 + ssidBytes.length + passwordBytes.length + tokenBytes.length);
-  userData[0] = SETTING_ITEMS.SET_WIFI_CREDENTIALS;
-  userData[1] = ssidBytes.length;
-  userData.set(ssidBytes, 2);
-  userData[2 + ssidBytes.length] = passwordBytes.length;
-  userData.set(passwordBytes, 3 + ssidBytes.length);
-  // Token is appended after password
-  userData.set(tokenBytes, 3 + ssidBytes.length + passwordBytes.length);
+  // User data starts with setting item (0x02) as per protocol table 3B-2
+  let userData;
   
-  // Create function code and timestamp
-  const functionCode = new Uint8Array([FUNCTION_CODES.SET_WIFI]);
-  const timestamp = generateTimestamp();
+  if (token) {
+    // If token is provided, include it after password
+    const tokenBytes = stringToUint8Array(token);
+    userData = new Uint8Array(1 + 1 + ssidBytes.length + 1 + passwordBytes.length + tokenBytes.length);
+    let offset = 0;
+    
+    // Setting item (0x02 for WiFi credentials)
+    userData[offset++] = SETTING_ITEMS.SET_WIFI_CREDENTIALS;
+    
+    // SSID length
+    userData[offset++] = ssidBytes.length;
+    
+    // SSID data
+    userData.set(ssidBytes, offset);
+    offset += ssidBytes.length;
+    
+    // Password length
+    userData[offset++] = passwordBytes.length;
+    
+    // Password data
+    userData.set(passwordBytes, offset);
+    offset += passwordBytes.length;
+    
+    // Add token data
+    userData.set(tokenBytes, offset);
+  } else {
+    // Standard WiFi credentials without token
+    userData = new Uint8Array(1 + 1 + ssidBytes.length + 1 + passwordBytes.length);
+    let offset = 0;
+    
+    // Setting item (0x02 for WiFi credentials)
+    userData[offset++] = SETTING_ITEMS.SET_WIFI_CREDENTIALS;
+    
+    // SSID length
+    userData[offset++] = ssidBytes.length;
+    
+    // SSID data
+    userData.set(ssidBytes, offset);
+    offset += ssidBytes.length;
+    
+    // Password length
+    userData[offset++] = passwordBytes.length;
+    
+    // Password data
+    userData.set(passwordBytes, offset);
+  }
   
-  // Calculate data length (function code + timestamp + user data)
-  const dataLength = 1 + 4 + userData.length;
-  const dataLengthBytes = new Uint8Array([dataLength & 0xFF, (dataLength >> 8) & 0xFF]);
-  
-  // Combine function code, timestamp, and user data for CRC calculation
-  const dataForCrc = new Uint8Array(1 + 4 + userData.length);
-  dataForCrc.set(functionCode, 0);
-  dataForCrc.set(timestamp, 1);
-  dataForCrc.set(userData, 5);
-  
-  // Calculate CRC
-  const crc = calculateCRC16MODBUS(dataForCrc);
-  
-  // Assemble complete packet
-  const packet = new Uint8Array(
-    APP_TO_MODULE_HEADER.length +
-    dataLengthBytes.length +
-    functionCode.length +
-    timestamp.length +
-    userData.length +
-    crc.length +
-    APP_TO_MODULE_TAIL.length
-  );
-  
-  let offset = 0;
-  packet.set(APP_TO_MODULE_HEADER, offset);
-  offset += APP_TO_MODULE_HEADER.length;
-  packet.set(dataLengthBytes, offset);
-  offset += dataLengthBytes.length;
-  packet.set(functionCode, offset);
-  offset += functionCode.length;
-  packet.set(timestamp, offset);
-  offset += timestamp.length;
-  packet.set(userData, offset);
-  offset += userData.length;
-  packet.set(crc, offset);
-  offset += crc.length;
-  packet.set(APP_TO_MODULE_TAIL, offset);
-  
-  return packet;
+  return buildPacket(FUNCTION_CODES.SET_WIFI, userData);
 }
 
 /**
@@ -143,53 +139,9 @@ export function createSetWifiPacket(ssid, password, token) {
  * @returns {Uint8Array} - Complete packet
  */
 export function createReadStatusPacket() {
-  // Create user data
+  // User data is just the status item code
   const userData = new Uint8Array([STATUS_ITEMS.CONNECTION_STATUS]);
-  
-  // Create function code and timestamp
-  const functionCode = new Uint8Array([FUNCTION_CODES.READ_STATUS]);
-  const timestamp = generateTimestamp();
-  
-  // Calculate data length (function code + timestamp + user data)
-  const dataLength = 1 + 4 + userData.length;
-  const dataLengthBytes = new Uint8Array([dataLength & 0xFF, (dataLength >> 8) & 0xFF]);
-  
-  // Combine function code, timestamp, and user data for CRC calculation
-  const dataForCrc = new Uint8Array(1 + 4 + userData.length);
-  dataForCrc.set(functionCode, 0);
-  dataForCrc.set(timestamp, 1);
-  dataForCrc.set(userData, 5);
-  
-  // Calculate CRC
-  const crc = calculateCRC16MODBUS(dataForCrc);
-  
-  // Assemble complete packet
-  const packet = new Uint8Array(
-    APP_TO_MODULE_HEADER.length +
-    dataLengthBytes.length +
-    functionCode.length +
-    timestamp.length +
-    userData.length +
-    crc.length +
-    APP_TO_MODULE_TAIL.length
-  );
-  
-  let offset = 0;
-  packet.set(APP_TO_MODULE_HEADER, offset);
-  offset += APP_TO_MODULE_HEADER.length;
-  packet.set(dataLengthBytes, offset);
-  offset += dataLengthBytes.length;
-  packet.set(functionCode, offset);
-  offset += functionCode.length;
-  packet.set(timestamp, offset);
-  offset += timestamp.length;
-  packet.set(userData, offset);
-  offset += userData.length;
-  packet.set(crc, offset);
-  offset += crc.length;
-  packet.set(APP_TO_MODULE_TAIL, offset);
-  
-  return packet;
+  return buildPacket(FUNCTION_CODES.READ_STATUS, userData);
 }
 
 /**
@@ -197,113 +149,143 @@ export function createReadStatusPacket() {
  * @returns {Uint8Array} - Complete packet
  */
 export function createReadSsidListPacket() {
-  // Create user data
+  // User data is just the SSID list item code
   const userData = new Uint8Array([STATUS_ITEMS.SSID_LIST]);
-  
-  // Create function code and timestamp
-  const functionCode = new Uint8Array([FUNCTION_CODES.READ_STATUS]);
+  return buildPacket(FUNCTION_CODES.READ_STATUS, userData);
+}
+
+/**
+ * Builds a complete packet according to the FoxESS protocol specification
+ * @param {number} functionCode - Function code
+ * @param {Uint8Array} userData - User data
+ * @returns {Uint8Array} - Complete packet
+ */
+export function buildPacket(functionCode, userData) {
+  // 1. Create timestamp (4 bytes)
   const timestamp = generateTimestamp();
   
-  // Calculate data length (function code + timestamp + user data)
-  const dataLength = 1 + 4 + userData.length;
-  const dataLengthBytes = new Uint8Array([dataLength & 0xFF, (dataLength >> 8) & 0xFF]);
+  // 2. Create data length (2 bytes) - this is the length of user data only
+  const dataLength = new Uint8Array([
+    userData.length & 0xFF,
+    (userData.length >> 8) & 0xFF
+  ]);
   
-  // Combine function code, timestamp, and user data for CRC calculation
-  const dataForCrc = new Uint8Array(1 + 4 + userData.length);
-  dataForCrc.set(functionCode, 0);
-  dataForCrc.set(timestamp, 1);
-  dataForCrc.set(userData, 5);
+  // 3. Function code as single byte
+  const functionCodeByte = new Uint8Array([functionCode]);
   
-  // Calculate CRC
+  // 4. Data for CRC calculation (function code + timestamp + data length + user data)
+  // CRC excludes header but includes function code, timestamp, and user data
+  const dataForCrc = new Uint8Array(functionCodeByte.length + timestamp.length + dataLength.length + userData.length);
+  let offset = 0;
+  dataForCrc.set(functionCodeByte, offset);
+  offset += functionCodeByte.length;
+  dataForCrc.set(timestamp, offset);
+  offset += timestamp.length;
+  dataForCrc.set(dataLength, offset);
+  offset += dataLength.length;
+  dataForCrc.set(userData, offset);
+  
+  // 5. Calculate CRC-16 MODBUS
   const crc = calculateCRC16MODBUS(dataForCrc);
+  const crcBytes = new Uint8Array([crc & 0xFF, (crc >> 8) & 0xFF]); // Low byte first, high byte second
   
-  // Assemble complete packet
+  // 6. Assemble complete packet
   const packet = new Uint8Array(
-    APP_TO_MODULE_HEADER.length +
-    dataLengthBytes.length +
-    functionCode.length +
+    APP_TO_DEVICE_HEADER.length +
+    functionCodeByte.length +
     timestamp.length +
+    dataLength.length +
     userData.length +
-    crc.length +
-    APP_TO_MODULE_TAIL.length
+    crcBytes.length +
+    APP_TO_DEVICE_TAIL.length
   );
   
-  let offset = 0;
-  packet.set(APP_TO_MODULE_HEADER, offset);
-  offset += APP_TO_MODULE_HEADER.length;
-  packet.set(dataLengthBytes, offset);
-  offset += dataLengthBytes.length;
-  packet.set(functionCode, offset);
-  offset += functionCode.length;
+  // Add all components to the packet
+  offset = 0;
+  packet.set(APP_TO_DEVICE_HEADER, offset);
+  offset += APP_TO_DEVICE_HEADER.length;
+  packet.set(functionCodeByte, offset);
+  offset += functionCodeByte.length;
   packet.set(timestamp, offset);
   offset += timestamp.length;
+  packet.set(dataLength, offset);
+  offset += dataLength.length;
   packet.set(userData, offset);
   offset += userData.length;
-  packet.set(crc, offset);
-  offset += crc.length;
-  packet.set(APP_TO_MODULE_TAIL, offset);
+  packet.set(crcBytes, offset);
+  offset += crcBytes.length;
+  packet.set(APP_TO_DEVICE_TAIL, offset);
   
   return packet;
 }
 
 /**
- * Parse a response packet from the module
+ * Parse a response packet from the device
  * @param {Uint8Array} packet - Response packet
  * @returns {Object|null} - Parsed response or null if invalid
  */
 export function parseResponsePacket(packet) {
-  // Check header and tail
-  if (packet.length < 10) {
-    return null; // Packet too short
+  // 1. Check header and footer
+  if (packet.length < 9) { // Minimum packet size
+    console.error('Packet too short');
+    return null;
   }
   
-  const headerMatch = packet[0] === MODULE_TO_APP_HEADER[0] && packet[1] === MODULE_TO_APP_HEADER[1];
-  const tailMatch = packet[packet.length - 2] === MODULE_TO_APP_TAIL[0] && packet[packet.length - 1] === MODULE_TO_APP_TAIL[1];
+  // 2. Check for valid header and footer
+  const headerMatch = packet[0] === DEVICE_TO_APP_HEADER[0] && packet[1] === DEVICE_TO_APP_HEADER[1];
+  const footerMatch = packet[packet.length - 2] === DEVICE_TO_APP_TAIL[0] && 
+                     packet[packet.length - 1] === DEVICE_TO_APP_TAIL[1];
   
-  if (!headerMatch || !tailMatch) {
-    return null; // Invalid header or tail
+  if (!headerMatch || !footerMatch) {
+    console.error('Invalid header or footer');
+    return null;
   }
   
-  // Extract data length
-  const dataLength = packet[2] | (packet[3] << 8);
+  // 3. Extract function code
+  const functionCode = packet[2];
   
-  // Extract function code
-  const functionCode = packet[4];
+  // 4. Extract timestamp (4 bytes)
+  const timestamp = (packet[6] << 24) | (packet[5] << 16) | (packet[4] << 8) | packet[3];
   
-  // Extract timestamp
-  const timestamp = packet.slice(5, 9);
+  // 5. Extract data length (2 bytes)
+  const dataLength = (packet[8] << 8) | packet[7];
   
-  // Extract user data
-  const userData = packet.slice(9, packet.length - 4);
+  // 6. Extract user data
+  const userData = packet.slice(9, 9 + dataLength);
   
-  // Extract CRC
-  const crc = packet.slice(packet.length - 4, packet.length - 2);
+  // 7. Extract CRC (2 bytes)
+  const crcBytes = packet.slice(9 + dataLength, 9 + dataLength + 2);
+  const receivedCrc = (crcBytes[1] << 8) | crcBytes[0]; // Low byte first
   
-  // Verify CRC
-  const dataForCrc = packet.slice(4, packet.length - 4);
-  if (!verifyCRC16MODBUS(dataForCrc, crc)) {
-    return null; // Invalid CRC
+  // 8. Calculate expected CRC
+  const dataForCrc = packet.slice(2, 9 + dataLength); // From function code through user data
+  const expectedCrc = calculateCRC16MODBUS(dataForCrc);
+  
+  // 9. Verify CRC
+  if (receivedCrc !== expectedCrc) {
+    console.error('CRC check failed');
+    return null;
   }
   
-  // Parse based on function code
-  switch (functionCode) {
-    case FUNCTION_CODES.READ_STATUS:
-      return parseStatusResponse(userData);
-    case FUNCTION_CODES.SET_WIFI:
-      return parseWifiResponse(userData);
-    default:
-      return null; // Unknown function code
-  }
+  // 10. Return parsed packet
+  return {
+    functionCode,
+    timestamp,
+    dataLength,
+    userData,
+    crc: receivedCrc
+  };
 }
 
 /**
- * Parse a status response
+ * Parse a connection status response
  * @param {Uint8Array} userData - User data from response packet
  * @returns {Object} - Parsed status response
  */
-function parseStatusResponse(userData) {
+export function parseStatusResponse(userData) {
   if (userData.length < 1) {
-    return null; // Invalid user data
+    console.error('Invalid status response data');
+    return { status: CONNECTION_STATUS.DISCONNECTED };
   }
   
   const statusItem = userData[0];
@@ -311,16 +293,41 @@ function parseStatusResponse(userData) {
   switch (statusItem) {
     case STATUS_ITEMS.CONNECTION_STATUS:
       if (userData.length < 2) {
-        return null; // Invalid user data
+        console.error('Invalid connection status data');
+        return { status: CONNECTION_STATUS.DISCONNECTED };
       }
+      const statusCode = userData[1];
       return {
         type: 'connectionStatus',
-        status: userData[1]
+        status: statusCode,
+        isConnected: statusCode >= CONNECTION_STATUS.CONNECTED,
+        statusText: getStatusText(statusCode)
       };
     case STATUS_ITEMS.SSID_LIST:
-      return parseSsidList(userData.slice(1));
+      return parseSsidListResponse(userData.slice(1));
     default:
-      return null; // Unknown status item
+      console.error('Unknown status item');
+      return { status: CONNECTION_STATUS.DISCONNECTED };
+  }
+}
+
+/**
+ * Get status text from status code
+ * @param {number} statusCode - Status code
+ * @returns {string} - Status text
+ */
+function getStatusText(statusCode) {
+  switch (statusCode) {
+    case CONNECTION_STATUS.DISCONNECTED:
+      return 'Disconnected';
+    case CONNECTION_STATUS.CONNECTING:
+      return 'Connecting';
+    case CONNECTION_STATUS.CONNECTED:
+      return 'Connected to WiFi';
+    case CONNECTION_STATUS.CONNECTED_TO_CLOUD:
+      return 'Connected to Cloud';
+    default:
+      return 'Unknown Status';
   }
 }
 
@@ -329,7 +336,7 @@ function parseStatusResponse(userData) {
  * @param {Uint8Array} userData - User data from response packet
  * @returns {Object} - Parsed SSID list
  */
-function parseSsidList(userData) {
+export function parseSsidListResponse(userData) {
   const ssidList = [];
   let offset = 0;
   
@@ -368,9 +375,10 @@ function parseSsidList(userData) {
  * @param {Uint8Array} userData - User data from response packet
  * @returns {Object} - Parsed WiFi response
  */
-function parseWifiResponse(userData) {
+export function parseWifiResponse(userData) {
   if (userData.length < 2) {
-    return null; // Invalid user data
+    console.error('Invalid WiFi response data');
+    return { success: false };
   }
   
   const settingItem = userData[0];
@@ -379,6 +387,34 @@ function parseWifiResponse(userData) {
   return {
     type: 'wifiResponse',
     settingItem,
-    success: result === 0x01
+    success: result === 0x01,
+    resultCode: result,
+    resultText: getResultText(result)
   };
+}
+
+/**
+ * Get result text from result code
+ * @param {number} resultCode - Result code
+ * @returns {string} - Result text
+ */
+function getResultText(resultCode) {
+  switch (resultCode) {
+    case 0x00:
+      return 'Failed';
+    case 0x01:
+      return 'Success';
+    case 0x02:
+      return 'WiFi Connecting';
+    case 0x03:
+      return 'WiFi Connection Timed Out';
+    case 0x04:
+      return 'Wrong Password';
+    case 0x05:
+      return 'Cannot Find SSID';
+    case 0x06:
+      return 'Connection Failed';
+    default:
+      return 'Unknown Result';
+  }
 }

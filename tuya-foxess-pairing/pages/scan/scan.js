@@ -13,21 +13,21 @@ Page({
       devices: []
     });
 
-    wx.showLoading({
+    E.showLoading({
       title: 'Scanning...',
       mask: false // Changed from true to allow interaction with back button
     });
 
-    // Using wx.getBLEDevices API to scan for devices
-    wx.openBluetoothAdapter({
+    // Using E.openBluetoothAdapter which maps to Tuya's BLE API
+    E.openBluetoothAdapter({
       success: (res) => {
-        wx.startBluetoothDevicesDiscovery({
+        E.startBluetoothDevicesDiscovery({
           allowDuplicatesKey: true, // Allow RSSI updates
           success: (res) => {
             console.log('Started scanning for devices:', res);
             
             // Listen for devices found
-            wx.onBluetoothDeviceFound((res) => {
+            E.onBluetoothDeviceFound((res) => {
               const devices = res.devices.map(device => {
                 // Better filtering for FoxESS devices:
                 // 1. Check name pattern
@@ -82,10 +82,10 @@ Page({
           },
           fail: (error) => {
             console.error('Failed to start scanning:', error);
-            wx.hideLoading();
+            E.hideLoading();
             this.setData({ scanning: false });
             
-            wx.showToast({
+            E.showToast({
               title: 'Failed to start scan',
               icon: 'none',
               duration: 2000
@@ -95,10 +95,10 @@ Page({
       },
       fail: (error) => {
         console.error('Failed to open Bluetooth adapter:', error);
-        wx.hideLoading();
+        E.hideLoading();
         this.setData({ scanning: false });
         
-        wx.showToast({
+        E.showToast({
           title: 'Please enable Bluetooth',
           icon: 'none',
           duration: 2000
@@ -110,20 +110,20 @@ Page({
   // Stop scanning for devices
   stopScan: function() {
     try {
-      wx.stopBluetoothDevicesDiscovery({
+      E.stopBluetoothDevicesDiscovery({
         success: (res) => {
           console.log('Stopped scanning for devices');
         },
         complete: () => {
           // Always hide loading and update state even if stopping scan fails
-          wx.hideLoading();
+          E.hideLoading();
           this.setData({ scanning: false });
         }
       });
     } catch (error) {
       console.error('Error stopping scan:', error);
       // Make sure to hide loading and update state even if an exception occurs
-      wx.hideLoading();
+      E.hideLoading();
       this.setData({ scanning: false });
     }
   },
@@ -135,11 +135,11 @@ Page({
     
     if (selectedDevice) {
       // Store selected device in global data
-      const pages = getCurrentPages();
       const app = getApp();
       app.globalData.selectedDevice = selectedDevice;
       
-      wx.navigateTo({
+      // Use ty directly for navigation since E might not have this mapped
+      ty.navigateTo({
         url: '/pages/config/config'
       });
     }

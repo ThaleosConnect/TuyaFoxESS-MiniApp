@@ -59,7 +59,7 @@ Page({
     const { ssid, password } = e.detail.value;
     
     if (!ssid) {
-      wx.showToast({
+      E.showToast({
         title: 'Please enter SSID',
         icon: 'none'
       });
@@ -151,14 +151,14 @@ Page({
         'stepProgress.scanning': 'failed'
       });
       
-      wx.showToast({
+      E.showToast({
         title: 'No device selected',
         icon: 'none',
         duration: 2000
       });
       
       setTimeout(() => {
-        wx.navigateBack();
+        ty.navigateBack();
       }, 2000);
       
       return;
@@ -177,13 +177,13 @@ Page({
       'stepProgress.connecting': 'in_progress'
     });
 
-    wx.showLoading({
+    E.showLoading({
       title: 'Connecting...',
       mask: true
     });
 
     // Connect to the BLE device
-    wx.createBLEConnection({
+    E.connectBLEDevice({
       deviceId: selectedDevice.deviceId,
       success: (res) => {
         this.addDebugLog('info', 'Connected to device successfully');
@@ -196,7 +196,7 @@ Page({
         });
 
         // Get services for the device
-        wx.getBLEDeviceServices({
+        E.getBLEDeviceServices({
           deviceId: selectedDevice.deviceId,
           success: (res) => {
             this.addDebugLog('debug', 'Device services discovered', { 
@@ -209,7 +209,7 @@ Page({
             
             if (foxessService) {
               // Get characteristics for the service
-              wx.getBLEDeviceCharacteristics({
+              E.getBLEDeviceCharacteristics({
                 deviceId: selectedDevice.deviceId,
                 serviceId: foxessService.uuid,
                 success: (res) => {
@@ -254,43 +254,57 @@ Page({
                 },
                 fail: (error) => {
                   this.addDebugLog('error', 'Failed to get characteristics', { error });
+                  this.setData({
+                    'stepProgress.characteristics': 'failed'
+                  });
                   this.handleConnectionError('Failed to get characteristics');
                 }
               });
             } else {
+              this.addDebugLog('error', 'FoxESS service not found');
+              this.setData({
+                'stepProgress.services': 'failed'
+              });
               this.handleConnectionError('FoxESS service not found');
             }
           },
           fail: (error) => {
             this.addDebugLog('error', 'Failed to get services', { error });
+            this.setData({
+              'stepProgress.services': 'failed'
+            });
             this.handleConnectionError('Failed to get services');
           }
         });
       },
       fail: (error) => {
         this.addDebugLog('error', 'Failed to connect to device', { error });
-        this.handleConnectionError('Failed to connect to device');
+        this.setData({
+          'stepProgress.connecting': 'failed'
+        });
+        this.handleConnectionError(`Failed to connect to device: ${error.errMsg || error.errCode || 'Unknown error'}`);
       }
     });
   },
   
   // Handle connection errors
   handleConnectionError(message) {
-    this.addDebugLog('error', 'Connection error', { message });
+    E.hideLoading();
     
     this.setData({
+      connecting: false,
       connectionStatus: 'failed',
-      statusMessage: `Error: ${message}`,
-      connecting: false
+      statusMessage: message || 'Connection failed'
     });
     
-    wx.hideLoading();
-    
-    wx.showToast({
-      title: message,
+    E.showToast({
+      title: message || 'Connection failed',
       icon: 'none',
       duration: 2000
     });
+    
+    // Attempt to close any existing connection
+    this.closeBleConnection();
   },
   
   // Build FoxESS WiFi configuration packet (command 0x3B)
@@ -358,7 +372,7 @@ Page({
     const wifiConfigPacket = this.buildFoxWifiFrame(ssid, password);
     
     // Enable notifications for response
-    wx.notifyBLECharacteristicValueChange({
+    E.notifyBLECharacteristicValueChange({
       deviceId,
       serviceId,
       characteristicId,
@@ -367,7 +381,7 @@ Page({
         this.addDebugLog('debug', 'Enabled notifications for characteristic');
         
         // Write the configuration packet
-        wx.writeBLECharacteristicValue({
+        E.writeBLECharacteristicValue({
           deviceId,
           serviceId,
           characteristicId,
@@ -396,8 +410,8 @@ Page({
     });
     
     // Set up notification handler
-    wx.onBLECharacteristicValueChange(result => {
-      this.parseFoxReply(result.value);
+    E.onBLECharacteristicValueChange((res) => {
+      this.parseFoxReply(res.value);
     });
   },
   
@@ -470,7 +484,7 @@ Page({
   
   // Process WiFi configuration response
   processWifiConfigResponse(status, payload) {
-    wx.hideLoading();
+    E.hideLoading();
     
     if (status === 0) {
       this.addDebugLog('info', 'WiFi configuration successful');
@@ -481,7 +495,7 @@ Page({
         connecting: false
       });
       
-      wx.showToast({
+      E.showToast({
         title: 'Configuration successful',
         icon: 'success',
         duration: 2000
@@ -492,7 +506,7 @@ Page({
       
       // Navigate back after delay
       setTimeout(() => {
-        wx.navigateBack();
+        ty.navigateBack();
       }, 3000);
     } else {
       this.addDebugLog('error', 'WiFi configuration failed', { status });
@@ -503,7 +517,7 @@ Page({
         connecting: false
       });
       
-      wx.showToast({
+      E.showToast({
         title: 'Configuration failed',
         icon: 'none',
         duration: 2000
@@ -516,31 +530,34 @@ Page({
     const app = getApp();
     const selectedDevice = app.globalData.selectedDevice;
     
-    if (selectedDevice) {
-      this.addDebugLog('debug', 'Closing BLE connection');
-      
-      wx.closeBLEConnection({
-        deviceId: selectedDevice.deviceId,
-        success: (res) => {
-          this.addDebugLog('debug', 'BLE connection closed');
-        },
-        fail: (error) => {
-          this.addDebugLog('error', 'Failed to close BLE connection', { error });
-        },
-        complete: () => {
-          // Reset device selection
-          app.globalData.selectedDevice = null;
+    if (selectedDevice && selectedDevice.deviceId) {
+      try {
+        E.closeBLEConnection({
+          deviceId: selectedDevice.deviceId,
+          success: (res) => {
+            this.addDebugLog('info', 'BLE connection closed');
+          },
+          fail: (error) => {
+            this.addDebugLog('warn', 'Failed to close BLE connection', { error });
+          },
+          complete: () => {
+            E.closeBluetoothAdapter();
+          }
+        });
+      } catch (error) {
+        this.addDebugLog('warn', 'Error while closing BLE connection', { error });
+        try {
+          E.closeBluetoothAdapter();
+        } catch (e) {
+          this.addDebugLog('warn', 'Failed to close Bluetooth adapter', { error: e });
         }
-      });
-    } else {
-      // Still try to stop discovery even if no device is connected
-      wx.stopBluetoothDevicesDiscovery();
+      }
     }
   },
   
   // Navigate back
   goBack() {
-    wx.navigateBack();
+    ty.navigateBack();
   },
   
   // Clean up when leaving the page

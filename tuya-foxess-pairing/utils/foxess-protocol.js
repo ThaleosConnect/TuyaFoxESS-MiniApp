@@ -1,148 +1,288 @@
-// FoxESS Protocol Implementation
+// FoxESS Protocol Implementation - Aligned with FoxESS BLE Protocol Specification
 import { crc16modbus } from './crc';
 
 // Protocol constants
-export const HEADER_BYTE = 0xA5;
-export const FOOTER_BYTE = 0x5A;
+export const FOXESS_SERVICE_UUID = '00FF';
+export const FOXESS_CHARACTERISTIC_UUID = 'FF01';
 
-// Function codes
+// Frame headers and tails (fixed values as per the protocol)
+export const APP_TO_DEVICE_HEADER = new Uint8Array([0x7F, 0x7F]);
+export const APP_TO_DEVICE_TAIL = new Uint8Array([0xF7, 0xF7]);
+export const DEVICE_TO_APP_HEADER = new Uint8Array([0x7E, 0x7E]);
+export const DEVICE_TO_APP_TAIL = new Uint8Array([0xE7, 0xE7]);
+
+// Function codes (as specified in the protocol)
 export const FUNCTION_CODES = {
-  HANDSHAKE: 0x01,
-  SET_WIFI: 0x02,
-  GET_STATUS: 0x03,
-  ACTIVATE: 0x04
+  SET_WIFI: 0x3B,  // Set wifi name and password
+  READ_STATUS: 0x3A  // Read network connection status
+};
+
+// Setting items (as specified in protocol table 3B-2)
+export const SETTING_ITEMS = {
+  SET_WIFI_CREDENTIALS: 0x02
+};
+
+// Status items (as specified in protocol)
+export const STATUS_ITEMS = {
+  CONNECTION_STATUS: 0x04,
+  SSID_LIST: 0x06
 };
 
 // Connection status codes
 export const CONNECTION_STATUS = {
-  DISCONNECTED: 'disconnected',
-  CONNECTING: 'connecting',
-  CONNECTED: 'connected',
-  FAILED: 'failed'
+  DISCONNECTED: 0x00,
+  CONNECTING: 0x01,
+  CONNECTED: 0x02,
+  CONNECTED_TO_CLOUD: 0x03
 };
 
-// Builds a packet to send to the FoxESS device
-export function buildPacket(functionCode, data = []) {
-  // Calculate packet length (header + function code + data length + data + crc + footer)
-  const length = 1 + 1 + 1 + data.length + 2 + 1;
+/**
+ * Generate current timestamp in seconds (4 bytes as per protocol)
+ * @returns {Uint8Array} - 4-byte timestamp
+ */
+function generateTimestamp() {
+  const now = Math.floor(Date.now() / 1000); // Current time in seconds
+  return new Uint8Array([
+    now & 0xFF,
+    (now >> 8) & 0xFF,
+    (now >> 16) & 0xFF,
+    (now >> 24) & 0xFF
+  ]);
+}
+
+/**
+ * Convert string to Uint8Array
+ * @param {string} str - String to convert
+ * @returns {Uint8Array} - Uint8Array representation of the string
+ */
+function stringToUint8Array(str) {
+  const encoder = new TextEncoder();
+  return encoder.encode(str);
+}
+
+/**
+ * Convert Uint8Array to string
+ * @param {Uint8Array} uint8Array - Uint8Array to convert
+ * @returns {string} - String representation of the Uint8Array
+ */
+function uint8ArrayToString(uint8Array) {
+  const decoder = new TextDecoder();
+  return decoder.decode(uint8Array);
+}
+
+/**
+ * Create a packet for setting WiFi credentials
+ * @param {string} ssid - WiFi SSID
+ * @param {string} password - WiFi password
+ * @returns {Uint8Array} - Complete packet
+ */
+export function createSetWifiPacket(ssid, password) {
+  // Convert strings to Uint8Arrays
+  const ssidBytes = stringToUint8Array(ssid);
+  const passwordBytes = stringToUint8Array(password);
   
-  // Create buffer for packet
-  const packet = new Uint8Array(length);
+  // User data starts with setting item (0x02) as per protocol table 3B-2
+  const userData = new Uint8Array(1 + 1 + ssidBytes.length + 1 + passwordBytes.length);
+  let offset = 0;
   
-  // Add header
-  packet[0] = HEADER_BYTE;
+  // Setting item (0x02 for WiFi credentials)
+  userData[offset++] = SETTING_ITEMS.SET_WIFI_CREDENTIALS;
   
-  // Add function code
-  packet[1] = functionCode;
+  // SSID length
+  userData[offset++] = ssidBytes.length;
   
-  // Add data length
-  packet[2] = data.length;
+  // SSID data
+  userData.set(ssidBytes, offset);
+  offset += ssidBytes.length;
   
-  // Add data
-  for (let i = 0; i < data.length; i++) {
-    packet[3 + i] = data[i];
-  }
+  // Password length
+  userData[offset++] = passwordBytes.length;
   
-  // Calculate CRC
-  const crcBuffer = packet.slice(1, 3 + data.length);
-  const crc = crc16modbus(crcBuffer);
+  // Password data
+  userData.set(passwordBytes, offset);
   
-  // Add CRC (2 bytes, little-endian)
-  packet[3 + data.length] = crc & 0xFF;
-  packet[3 + data.length + 1] = (crc >> 8) & 0xFF;
+  return buildPacket(FUNCTION_CODES.SET_WIFI, userData);
+}
+
+/**
+ * Create a packet for reading network status
+ * @returns {Uint8Array} - Complete packet
+ */
+export function createStatusPacket() {
+  // User data is just the status item code
+  const userData = new Uint8Array([STATUS_ITEMS.CONNECTION_STATUS]);
+  return buildPacket(FUNCTION_CODES.READ_STATUS, userData);
+}
+
+/**
+ * Create a packet for reading SSID list
+ * @returns {Uint8Array} - Complete packet
+ */
+export function createReadSsidListPacket() {
+  // User data is just the SSID list item code
+  const userData = new Uint8Array([STATUS_ITEMS.SSID_LIST]);
+  return buildPacket(FUNCTION_CODES.READ_STATUS, userData);
+}
+
+/**
+ * Builds a complete packet according to the FoxESS protocol specification
+ * @param {number} functionCode - Function code
+ * @param {Uint8Array} userData - User data
+ * @returns {Uint8Array} - Complete packet
+ */
+export function buildPacket(functionCode, userData) {
+  // 1. Create timestamp (4 bytes)
+  const timestamp = generateTimestamp();
   
-  // Add footer
-  packet[length - 1] = FOOTER_BYTE;
+  // 2. Create data length (2 bytes) - this is the length of user data only
+  const dataLength = new Uint8Array([
+    userData.length & 0xFF,
+    (userData.length >> 8) & 0xFF
+  ]);
+  
+  // 3. Function code as single byte
+  const functionCodeByte = new Uint8Array([functionCode]);
+  
+  // 4. Data for CRC calculation (function code + timestamp + user data)
+  // CRC excludes header but includes function code, timestamp, and user data
+  const dataForCrc = new Uint8Array(functionCodeByte.length + timestamp.length + dataLength.length + userData.length);
+  let offset = 0;
+  dataForCrc.set(functionCodeByte, offset);
+  offset += functionCodeByte.length;
+  dataForCrc.set(timestamp, offset);
+  offset += timestamp.length;
+  dataForCrc.set(dataLength, offset);
+  offset += dataLength.length;
+  dataForCrc.set(userData, offset);
+  
+  // 5. Calculate CRC-16 MODBUS
+  const crc = crc16modbus(dataForCrc);
+  const crcBytes = new Uint8Array([crc & 0xFF, (crc >> 8) & 0xFF]); // Low byte first, high byte second
+  
+  // 6. Assemble complete packet
+  const packet = new Uint8Array(
+    APP_TO_DEVICE_HEADER.length +
+    functionCodeByte.length +
+    timestamp.length +
+    dataLength.length +
+    userData.length +
+    crcBytes.length +
+    APP_TO_DEVICE_TAIL.length
+  );
+  
+  // Add all components to the packet
+  offset = 0;
+  packet.set(APP_TO_DEVICE_HEADER, offset);
+  offset += APP_TO_DEVICE_HEADER.length;
+  packet.set(functionCodeByte, offset);
+  offset += functionCodeByte.length;
+  packet.set(timestamp, offset);
+  offset += timestamp.length;
+  packet.set(dataLength, offset);
+  offset += dataLength.length;
+  packet.set(userData, offset);
+  offset += userData.length;
+  packet.set(crcBytes, offset);
+  offset += crcBytes.length;
+  packet.set(APP_TO_DEVICE_TAIL, offset);
   
   return packet;
 }
 
-// Parse a packet received from the FoxESS device
-export function parsePacket(packet) {
-  // Check header and footer
-  if (packet[0] !== HEADER_BYTE || packet[packet.length - 1] !== FOOTER_BYTE) {
-    throw new Error('Invalid packet format');
+/**
+ * Parse a response packet from the device
+ * @param {Uint8Array} packet - Response packet
+ * @returns {Object|null} - Parsed response or null if invalid
+ */
+export function parseResponsePacket(packet) {
+  // 1. Check header and footer
+  if (packet.length < 9) { // Minimum packet size
+    console.error('Packet too short');
+    return null;
   }
   
-  // Get function code
-  const functionCode = packet[1];
+  // 2. Check for valid header and footer
+  const headerMatch = packet[0] === DEVICE_TO_APP_HEADER[0] && packet[1] === DEVICE_TO_APP_HEADER[1];
+  const footerMatch = packet[packet.length - 2] === DEVICE_TO_APP_TAIL[0] && 
+                     packet[packet.length - 1] === DEVICE_TO_APP_TAIL[1];
   
-  // Get data length
-  const dataLength = packet[2];
+  if (!headerMatch || !footerMatch) {
+    console.error('Invalid header or footer');
+    return null;
+  }
   
-  // Get data
-  const data = packet.slice(3, 3 + dataLength);
+  // 3. Extract function code
+  const functionCode = packet[2];
   
-  // Verify CRC
-  const crcBuffer = packet.slice(1, 3 + dataLength);
-  const expectedCrc = crc16modbus(crcBuffer);
+  // 4. Extract timestamp (4 bytes)
+  const timestamp = (packet[6] << 24) | (packet[5] << 16) | (packet[4] << 8) | packet[3];
   
-  const receivedCrc = (packet[3 + dataLength + 1] << 8) | packet[3 + dataLength];
+  // 5. Extract data length (2 bytes)
+  const dataLength = (packet[8] << 8) | packet[7];
   
+  // 6. Extract user data
+  const userData = packet.slice(9, 9 + dataLength);
+  
+  // 7. Extract CRC (2 bytes)
+  const crcBytes = packet.slice(9 + dataLength, 9 + dataLength + 2);
+  const receivedCrc = (crcBytes[1] << 8) | crcBytes[0]; // Low byte first
+  
+  // 8. Calculate expected CRC
+  const dataForCrc = packet.slice(2, 9 + dataLength); // From function code through user data
+  const expectedCrc = crc16modbus(dataForCrc);
+  
+  // 9. Verify CRC
   if (receivedCrc !== expectedCrc) {
-    throw new Error('CRC check failed');
+    console.error('CRC check failed');
+    return null;
   }
   
+  // 10. Return parsed packet
   return {
     functionCode,
-    data
+    timestamp,
+    dataLength,
+    userData,
+    crc: receivedCrc
   };
 }
 
-// Create a Wi-Fi configuration packet
-export function createWifiConfigPacket(ssid, password) {
-  // Convert strings to bytes
-  const ssidBytes = new TextEncoder().encode(ssid);
-  const passwordBytes = new TextEncoder().encode(password);
-  
-  // Create data array
-  const data = new Uint8Array(2 + ssidBytes.length + 1 + passwordBytes.length);
-  
-  // Add SSID length
-  data[0] = ssidBytes.length;
-  
-  // Add SSID
-  for (let i = 0; i < ssidBytes.length; i++) {
-    data[1 + i] = ssidBytes[i];
+/**
+ * Parse a connection status response
+ * @param {Uint8Array} userData - User data from response packet
+ * @returns {Object} - Parsed status response
+ */
+export function parseStatusResponse(userData) {
+  if (userData.length < 1) {
+    console.error('Invalid status response data');
+    return { status: CONNECTION_STATUS.DISCONNECTED };
   }
   
-  // Add password length
-  data[1 + ssidBytes.length] = passwordBytes.length;
-  
-  // Add password
-  for (let i = 0; i < passwordBytes.length; i++) {
-    data[1 + ssidBytes.length + 1 + i] = passwordBytes[i];
-  }
-  
-  return buildPacket(FUNCTION_CODES.SET_WIFI, data);
-}
-
-// Create a handshake packet
-export function createHandshakePacket() {
-  return buildPacket(FUNCTION_CODES.HANDSHAKE);
-}
-
-// Create a status request packet
-export function createStatusPacket() {
-  return buildPacket(FUNCTION_CODES.GET_STATUS);
-}
-
-// Create an activation packet with the Tuya token
-export function createActivationPacket(token) {
-  const tokenBytes = new TextEncoder().encode(token);
-  return buildPacket(FUNCTION_CODES.ACTIVATE, tokenBytes);
-}
-
-// Parse a status response packet
-export function parseStatusResponse(data) {
-  if (data.length < 1) {
-    throw new Error('Invalid status response');
-  }
-  
-  const statusCode = data[0];
+  const statusCode = userData[0];
   
   return {
-    connected: statusCode === 0x01,
-    statusCode
+    status: statusCode,
+    isConnected: statusCode >= CONNECTION_STATUS.CONNECTED,
+    statusText: getStatusText(statusCode)
   };
+}
+
+/**
+ * Get status text from status code
+ * @param {number} statusCode - Status code
+ * @returns {string} - Status text
+ */
+function getStatusText(statusCode) {
+  switch (statusCode) {
+    case CONNECTION_STATUS.DISCONNECTED:
+      return 'Disconnected';
+    case CONNECTION_STATUS.CONNECTING:
+      return 'Connecting';
+    case CONNECTION_STATUS.CONNECTED:
+      return 'Connected to WiFi';
+    case CONNECTION_STATUS.CONNECTED_TO_CLOUD:
+      return 'Connected to Cloud';
+    default:
+      return 'Unknown Status';
+  }
 }
