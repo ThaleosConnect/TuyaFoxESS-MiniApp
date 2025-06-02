@@ -13,21 +13,21 @@ Page({
       devices: []
     });
 
-    E.showLoading({
+    ty.showLoading({
       title: 'Scanning...',
-      mask: false // Changed from true to allow interaction with back button
+      mask: false
     });
 
-    // Using E.openBluetoothAdapter which maps to Tuya's BLE API
-    E.openBluetoothAdapter({
+    // Using Tuya's BLE API
+    ty.openBluetoothAdapter({
       success: (res) => {
-        E.startBluetoothDevicesDiscovery({
+        ty.startBluetoothDevicesDiscovery({
           allowDuplicatesKey: true, // Allow RSSI updates
           success: (res) => {
             console.log('Started scanning for devices:', res);
             
             // Listen for devices found
-            E.onBluetoothDeviceFound((res) => {
+            ty.onBluetoothDeviceFound((res) => {
               const devices = res.devices.map(device => {
                 // Better filtering for FoxESS devices:
                 // 1. Check name pattern
@@ -82,10 +82,10 @@ Page({
           },
           fail: (error) => {
             console.error('Failed to start scanning:', error);
-            E.hideLoading();
+            ty.hideLoading();
             this.setData({ scanning: false });
             
-            E.showToast({
+            ty.showToast({
               title: 'Failed to start scan',
               icon: 'none',
               duration: 2000
@@ -95,10 +95,10 @@ Page({
       },
       fail: (error) => {
         console.error('Failed to open Bluetooth adapter:', error);
-        E.hideLoading();
+        ty.hideLoading();
         this.setData({ scanning: false });
         
-        E.showToast({
+        ty.showToast({
           title: 'Please enable Bluetooth',
           icon: 'none',
           duration: 2000
@@ -110,20 +110,20 @@ Page({
   // Stop scanning for devices
   stopScan: function() {
     try {
-      E.stopBluetoothDevicesDiscovery({
+      ty.stopBluetoothDevicesDiscovery({
         success: (res) => {
           console.log('Stopped scanning for devices');
         },
         complete: () => {
           // Always hide loading and update state even if stopping scan fails
-          E.hideLoading();
+          ty.hideLoading();
           this.setData({ scanning: false });
         }
       });
     } catch (error) {
       console.error('Error stopping scan:', error);
       // Make sure to hide loading and update state even if an exception occurs
-      E.hideLoading();
+      ty.hideLoading();
       this.setData({ scanning: false });
     }
   },
@@ -147,7 +147,7 @@ Page({
 
   // Go back to the index page
   goBack: function() {
-    wx.navigateBack();
+    ty.navigateBack();
   },
 
   // Lifecycle function - called when page loads
